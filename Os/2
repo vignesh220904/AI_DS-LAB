@@ -1,0 +1,86 @@
+#include <stdio.h>
+#include <stdlib.h>
+
+#define BLOCK_SIZE 512
+
+typedef struct block {
+    char data[BLOCK_SIZE];
+    int next;
+} Block;
+
+int main() {
+    FILE *fp;
+    Block b;
+    int i, n, head, tail, newBlock;
+    char filename[20];
+
+    printf("Enter the number of blocks: ");
+    scanf("%d", &n);
+
+    // Create a new file for writing
+    printf("Enter the file name: ");
+    scanf("%s", filename);
+    fp = fopen(filename, "wb");
+    if (fp == NULL) {
+        perror("Error opening file");
+        return 1;
+    }
+
+    // Initialize the first block
+    head = 0;
+    tail = 0;
+    b.next = -1;
+    fwrite(&b, sizeof(Block), 1, fp);
+
+    // Allocate and write data to the file blocks
+    for (i = 1; i <= n; i++) {
+        printf("Enter data for block %d: ", i);
+        scanf("%s", b.data);
+
+        // Write data to the current block
+        fwrite(&b, sizeof(Block), 1, fp);
+
+        // Remember the current block position
+        tail = ftell(fp) - sizeof(Block);
+
+        // Allocate a new block
+        b.next = -1;
+        fwrite(&b, sizeof(Block), 1, fp);
+
+        // Remember the new block position
+        newBlock = ftell(fp) - sizeof(Block);
+
+        // Update the previous block's next pointer to point to the new block
+        fseek(fp, tail, SEEK_SET);
+        fread(&b, sizeof(Block), 1, fp);
+        b.next = newBlock;
+        fseek(fp, tail, SEEK_SET);
+        fwrite(&b, sizeof(Block), 1, fp);
+        fseek(fp, newBlock, SEEK_SET);  // Move back to the new block
+    }
+    fclose(fp);
+
+    // Read and print data from the file blocks
+    printf("\nData in the file:\n");
+    fp = fopen(filename, "rb");
+    if (fp == NULL) {
+        perror("Error opening file");
+        return 1;
+    }
+
+    fseek(fp, head, SEEK_SET);
+
+    while (head != -1) {
+        fread(&b, sizeof(Block), 1, fp);
+        printf("%s\n", b.data);
+        head = b.next;
+
+        if (head != -1) {
+            fseek(fp, head, SEEK_SET);
+        }
+    }
+
+    fclose(fp);
+
+    return 0;
+}
