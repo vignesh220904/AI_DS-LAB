@@ -1,0 +1,65 @@
+import numpy as np
+import pandas as pd
+from sklearn.datasets import fetch_lfw_people
+import matplotlib.pyplot as plt
+import seaborn as sns
+from tensorflow.keras.utils import to_categorical
+from tensorflow.keras.applications.resnet50 import preprocess_input
+from sklearn.model_selection import train_test_split
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Flatten, Conv2D, MaxPooling2D, Resizing
+
+# Load the LFW dataset
+faces = fetch_lfw_people(min_faces_per_person=100, resize=1.0, slice_=(slice(60, 188), slice(60, 188)), color=True)
+class_count = len(faces.target_names)
+
+# Label the faces
+sns.set()
+fig, ax = plt.subplots(3, 6, figsize=(18, 10))
+for i, axi in enumerate(ax.flat):
+    axi.imshow(faces.images[i] / 255)
+    axi.set(xticks=[], yticks=[], xlabel=faces.target_names[faces.target[i]])
+
+# Normalizing the dataset
+mask = np.zeros(faces.target.shape, dtype=bool)
+for target in np.unique(faces.target):
+    mask[np.where(faces.target == target)[0][:100]] = 1
+
+x_faces = faces.data[mask]
+y_faces = faces.target[mask]
+
+# Splitting training and testing dataset
+face_images = preprocess_input(np.array(x_faces).reshape(-1, 62, 62, 3))  # Adjust shape if needed
+face_labels = to_categorical(y_faces)
+
+x_train, x_test, y_train, y_test = train_test_split(face_images, face_labels, train_size=0.8, stratify=face_labels, random_state=0)
+
+# Creating the model
+model = Sequential()
+model.add(Conv2D(32, (3, 3), activation='relu', input_shape=(face_images.shape[1:])))
+model.add(MaxPooling2D(2, 2))
+model.add(Conv2D(64, (3, 3), activation='relu'))
+model.add(MaxPooling2D(2, 2))
+model.add(Conv2D(64, (3, 3), activation='relu'))
+model.add(MaxPooling2D(2, 2))
+model.add(Flatten())
+model.add(Dense(1024, activation='relu'))
+model.add(Dense(class_count, activation='softmax'))
+model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+model.fit(x_train, y_train, validation_data=(x_test, y_test), epochs=20, batch_size=10)
+
+# Testing with ResNet50
+from tensorflow.keras.applications import ResNet50
+
+base_model = ResNet50(weights='imagenet', include_top=False)
+base_model.trainable = False
+
+# Activating the hidden layers
+model = Sequential()
+model.add(Resizing(224, 224))
+model.add(base_model)
+model.add(Flatten())
+model.add(Dense(1024, activation='relu'))
+model.add(Dense(class_count, activation='softmax'))
+
+model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
